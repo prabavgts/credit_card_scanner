@@ -44,6 +44,7 @@ class CardScannerCameraActivity : AppCompatActivity() {
   lateinit var backButton: View
   var isActivityRunning = false
 
+
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     setContentView(R.layout.card_scanner_camera_activity)
