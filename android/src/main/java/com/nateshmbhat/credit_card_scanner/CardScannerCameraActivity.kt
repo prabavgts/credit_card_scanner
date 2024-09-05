@@ -170,6 +170,7 @@ class CardScannerCameraActivity : AppCompatActivity() {
   }
 
   override fun onResume() {
+
     super.onResume()
     isActivityRunning = true
     bindAllCameraUseCases()
