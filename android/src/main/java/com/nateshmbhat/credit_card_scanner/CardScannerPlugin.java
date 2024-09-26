@@ -100,6 +100,8 @@ public class CardScannerPlugin implements FlutterPlugin, MethodCallHandler, Acti
             } else if (resultCode == Activity.RESULT_CANCELED) {
                 pendingResult.success(null);
                 pendingResult = null;
+            } else {
+                pendingResult = null;
             }
             return true;
         } else return false;
