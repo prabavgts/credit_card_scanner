@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.2.0
+- iOS: read card text with Apple's Vision framework instead of Google ML Kit. ML Kit has no arm64 simulator build, so apps using this plugin could not run on Apple Silicon simulators (Xcode 27 removed the Rosetta ones).
+
 ## 1.0.5
 - Updated for Flutter 3
 

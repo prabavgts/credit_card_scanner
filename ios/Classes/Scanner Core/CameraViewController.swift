@@ -8,11 +8,10 @@
 
 import UIKit
 import AVFoundation
-import MLKitTextRecognition
-import MLKitVision
+import Vision
 
 protocol CameraDelegate {
-    func camera(_ camera: CameraViewController, didScan scanResult: Text)
+    func camera(_ camera: CameraViewController, didScan scanResult: RecognizedText)
     func cameraDidStopScanning(_ camera: CameraViewController)
 }
 
@@ -20,7 +19,14 @@ protocol CameraDelegate {
 class CameraViewController: UIViewController {
     var scansDroppedSinceLastReset: Int = 0
     
-    let textRecognizer = TextRecognizer.textRecognizer()
+    // Reused for every frame; frames arrive one at a time on the video queue.
+    let textRecognitionRequest: VNRecognizeTextRequest = {
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        // Language correction rewrites digit runs into words.
+        request.usesLanguageCorrection = false
+        return request
+    }()
     
     var cameraDelegate: CameraDelegate?
     var captureSession: AVCaptureSession!
@@ -80,6 +86,10 @@ class CameraViewController: UIViewController {
         captureSession.sessionPreset = .high
         
         guard let safeCaptureDevice = AVCaptureDevice.default(for: .video), let safeCaptureDeviceInput = try? AVCaptureDeviceInput(device: safeCaptureDevice) else {
+            // No camera (e.g. the simulator): still leave a way back out.
+            DispatchQueue.main.async {
+                self.view.addSubview(self.backButton)
+            }
             return
         }
         
@@ -145,6 +155,7 @@ class CameraViewController: UIViewController {
     }
     
     func refocus() {
+        guard let device = device else { return }
         do {
             try device.lockForConfiguration()
             device.focusMode = .autoFocus
@@ -323,8 +334,8 @@ class CameraViewController: UIViewController {
     
     public func stopScanning() {
         DispatchQueue.main.async {
-            self.device.unlockForConfiguration()
-            self.captureSession.stopRunning()
+            self.device?.unlockForConfiguration()
+            self.captureSession?.stopRunning()
             self.dismiss(animated: true, completion: nil)
         }
     }
@@ -332,19 +343,24 @@ class CameraViewController: UIViewController {
 
 extension CameraViewController: AVCaptureVideoDataOutputSampleBufferDelegate {
     public func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        let visionImage = VisionImage(buffer: sampleBuffer)
-        
         // .right = portrait mode
         // .up = landscapeRight
-        visionImage.orientation = orientationForScanning
-        
-        guard let result = try? textRecognizer.results(in: visionImage) else {
+        let requestHandler = VNImageRequestHandler(
+            cmSampleBuffer: sampleBuffer,
+            orientation: orientationForScanning,
+            options: [:]
+        )
+
+        do {
+            try requestHandler.perform([textRecognitionRequest])
+        } catch {
             #if DEBUG
-            NSLog("Text Recognizer", "Something went wrong while setting up TextRecognizer")
+            NSLog("Text recognition failed: %@", error.localizedDescription)
             #endif
             return
         }
-        
+
+        let result = RecognizedText(observations: textRecognitionRequest.results ?? [])
         cameraDelegate?.camera(self, didScan: result)
     }
 }
@@ -357,7 +373,7 @@ extension CameraViewController {
         impactFeedbackgenerator.impactOccurred()
     }
 
-    var orientationForScanning: UIImage.Orientation {
+    var orientationForScanning: CGImagePropertyOrientation {
         if (cameraOrientation == .landscape) {
             // landscape mode
             return .up
